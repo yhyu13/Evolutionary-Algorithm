@@ -19,10 +19,11 @@ from helper import ei
 POOL = None                # multiprocess pool
 ENVS = None                # environment list for effective reuse
 TEST = False               # test training result
+LOAD_MODEL = False         # load training result
 N_KID = 10                 # half of the training population
 N_GENERATION = 5000         # training step
 LR = .05                    # learning rate
-SIGMA = .05                 # mutation strength or step size
+SIGMA = .1                 # mutation strength or step size
 N_CORE = mp.cpu_count()-1
 CONFIG = [
     dict(game="CartPole-v0",
@@ -110,13 +111,15 @@ def get_action(params, x, continuous_a):
 
 
 def build_net():
-    def linear(n_in, n_out):  # network linear layer
+    def linear(n_in, n_out,last_layer=False):  # network linear layer
         w = np.random.randn(n_in * n_out).astype(np.float32) * .1
         b = np.random.randn(n_out).astype(np.float32) * .1
+        if last_layer:
+            b -= 3. # samrt sigmoid
         return (n_in, n_out), np.concatenate((w, b))
     s0, p0 = linear(CONFIG['n_feature'], 30)
     s1, p1 = linear(30, 20)
-    s2, p2 = linear(20, CONFIG['n_action'])
+    s2, p2 = linear(20, CONFIG['n_action'],last_layer=True)
     return [s0, s1, s2], np.concatenate((p0, p1, p2))
 
 
@@ -151,6 +154,11 @@ def main():
 
     # training
     net_shapes, net_params = build_net()
+    '''
+    if LOAD_MODEL:
+        # load model, keep training
+        net_params = np.load('./models/model_reward_'+'.npy')
+        '''
     #env = gym.make(CONFIG['game']).unwrapped
     ENVS = [ei(vis=False,seed=0,diff=0) for _ in range(N_KID*2)]
     optimizer = SGD(net_params, LR)
@@ -170,7 +178,10 @@ def main():
                 '| Net_R: %.2f' % mar,
                 '| Kid_avg_R: %.2f' % kid_rewards.mean(),
                 '| Gen_T: %.2f' % (time.time() - t0),)
-            if mar >= CONFIG['eval_threshold']: break
+            if mar >= CONFIG['eval_threshold']:
+                # succeed, save model and break
+                np.save('./models/model_reward_'+str(CONFIG['eval_threshold']),net_params)
+                break
 
         # test
         if TEST:
@@ -191,12 +202,12 @@ def main():
 
     except KeyboardInterrupt:
         print("Ctrl-c received! Sending kill to process...")
-        del ENVS
         POOL.terminate()
+        del ENVS
     else:
         print("Normal termination")
-        del ENVS
         POOL.close()
+        del ENVS
     POOL.join()
 
 if __name__ == "__main__":
