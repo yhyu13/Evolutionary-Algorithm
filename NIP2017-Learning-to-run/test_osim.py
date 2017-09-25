@@ -160,14 +160,13 @@ def main():
         # load model, keep training
         net_params = np.load('./models/model_reward_2'+'.npy')
 
-    # test
-    if TEST:
-        print("\nTESTING....")
-        p = params_reshape(net_shapes, net_params)
-        env = ei(vis=True,seed=0,diff=0)
-        while True:
-            ep_r = get_reward(net_shapes, net_params, env,CONFIG['ep_max_step'], CONFIG['continuous_a'],None,)
-            print('episode reward: {}'.format(ep_r))
+
+    print("\nTESTING....")
+    p = params_reshape(net_shapes, net_params)
+    env = ei(vis=True,seed=0,diff=0)
+    while True:
+        ep_r = get_reward(net_shapes, net_params, env,CONFIG['ep_max_step'], CONFIG['continuous_a'],None,)
+        print('episode reward: {}'.format(ep_r))
           
 
 if __name__ == "__main__":

@@ -18,7 +18,6 @@ from helper import *
 
 POOL = None                # multiprocess pool
 ENVS = None                # environment list for effective reuse
-TEST = False               # test training result
 LOAD_MODEL = False         # load training result
 N_KID = 4                 # half of the training population
 N_GENERATION = 5000         # training step
@@ -104,7 +103,7 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
 
 # hangyu5 Sep25
 def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+    return 1 / (1 + np.exp(-np.clip(x,-5,5))
 
 def get_action(params, x, continuous_a):
     x = np.expand_dims(x, axis=0)
@@ -167,6 +166,7 @@ def main():
     optimizer = SGD(net_params, LR)
     POOL = mp.Pool(processes=N_CORE)
     mar = None      # moving average reward
+    t_start = time.time()
     try:
         print('START TRAINING%----------------------------------------------------%')
         for g in range(N_GENERATION):
@@ -180,28 +180,13 @@ def main():
                 'Gen: ', g,
                 '| Net_R: %.2f' % mar,
                 '| Kid_avg_R: %.2f' % kid_rewards.mean(),
-                '| Gen_T: %.2f' % (time.time() - t0),)
+                '| Gen_T: %.2f' % (time.time() - t0),
+                '| Total_T: %.2f' % ((time.time() - t_start)/3600)+'h',)
             if mar >= CONFIG['eval_threshold']:
                 # succeed, save model and break
                 np.save('./models/model_reward_'+str(CONFIG['eval_threshold']),net_params)
                 CONFIG['eval_threshold'] += 2
 
-        # test
-        if TEST:
-            print("\nTESTING....")
-            p = params_reshape(net_shapes, net_params)
-            env = ei(vis=True,seed=0,diff=0)
-            while True:
-                s = env.reset()
-                ep_r = 0.
-                for _ in range(CONFIG['ep_max_step']):
-                    env.render()
-                    a = get_action(p, s, CONFIG['continuous_a'])
-                    s, r, done, _ = env.step(a)
-                    ep_r += r
-                    if done:
-                        print('Episode reward:{.2f}'.format(ep_r))
-                        break
 
     except KeyboardInterrupt:
         print("Ctrl-c received! Sending kill to process...")
