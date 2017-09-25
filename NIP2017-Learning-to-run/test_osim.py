@@ -18,8 +18,8 @@ from helper import *
 
 POOL = None                # multiprocess pool
 ENVS = None                # environment list for effective reuse
-TEST = False               # test training result
-LOAD_MODEL = False         # load training result
+TEST = True               # test training result
+LOAD_MODEL = True         # load training result
 N_KID = 4                 # half of the training population
 N_GENERATION = 5000         # training step
 LR = .05                    # learning rate
@@ -146,8 +146,6 @@ def train(net_shapes, net_params, optimizer, utility):
     return net_params + gradients, rewards
 
 def main():
-    global ENVS
-    global POOL
  
     # utility instead reward for update parameters (rank transformation)
     base = N_KID * 2    # *2 for mirrored sampling
@@ -157,61 +155,20 @@ def main():
 
     # training
     net_shapes, net_params = build_net()
-    '''
+    
     if LOAD_MODEL:
         # load model, keep training
-        net_params = np.load('./models/model_reward_'+'.npy')
-        '''
-    #env = gym.make(CONFIG['game']).unwrapped
-    ENVS = [ei(vis=False,seed=0,diff=0) for _ in range(N_KID*2)]
-    optimizer = SGD(net_params, LR)
-    POOL = mp.Pool(processes=N_CORE)
-    mar = None      # moving average reward
-    try:
-        print('START TRAINING%----------------------------------------------------%')
-        for g in range(N_GENERATION):
-            t0 = time.time()
-            net_params, kid_rewards = train(net_shapes, net_params, optimizer, utility)
+        net_params = np.load('./models/model_reward_2'+'.npy')
 
-            # test trained net without noise
-            net_r = get_reward(net_shapes, net_params, ENVS[0],CONFIG['ep_max_step'], CONFIG['continuous_a'],None,)
-            mar = net_r if mar is None else 0.9 * mar + 0.1 * net_r       # moving average reward
-            print(
-                'Gen: ', g,
-                '| Net_R: %.2f' % mar,
-                '| Kid_avg_R: %.2f' % kid_rewards.mean(),
-                '| Gen_T: %.2f' % (time.time() - t0),)
-            if mar >= CONFIG['eval_threshold']:
-                # succeed, save model and break
-                np.save('./models/model_reward_'+str(CONFIG['eval_threshold']),net_params)
-                CONFIG['eval_threshold'] += 2
-
-        # test
-        if TEST:
-            print("\nTESTING....")
-            p = params_reshape(net_shapes, net_params)
-            env = ei(vis=True,seed=0,diff=0)
-            while True:
-                s = env.reset()
-                ep_r = 0.
-                for _ in range(CONFIG['ep_max_step']):
-                    env.render()
-                    a = get_action(p, s, CONFIG['continuous_a'])
-                    s, r, done, _ = env.step(a)
-                    ep_r += r
-                    if done:
-                        print('Episode reward:{.2f}'.format(ep_r))
-                        break
-
-    except KeyboardInterrupt:
-        print("Ctrl-c received! Sending kill to process...")
-        POOL.terminate()
-        del ENVS
-    else:
-        print("Normal termination")
-        POOL.close()
-        del ENVS
-    POOL.join()
+    # test
+    if TEST:
+        print("\nTESTING....")
+        p = params_reshape(net_shapes, net_params)
+        env = ei(vis=True,seed=0,diff=0)
+        while True:
+            ep_r = get_reward(net_shapes, net_params, env,CONFIG['ep_max_step'], CONFIG['continuous_a'],None,)
+            print('episode reward: {}'.format(ep_r))
+          
 
 if __name__ == "__main__":
     main()
