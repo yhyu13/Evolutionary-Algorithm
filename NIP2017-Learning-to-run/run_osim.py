@@ -103,7 +103,7 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
 
 # hangyu5 Sep25
 def sigmoid(x):
-    return 1 / (1 + np.exp(-np.clip(x,-5,5))
+    return 1 / (1 + np.exp(-np.clip(x,-5,5)))
 
 def get_action(params, x, continuous_a):
     x = np.expand_dims(x, axis=0)
