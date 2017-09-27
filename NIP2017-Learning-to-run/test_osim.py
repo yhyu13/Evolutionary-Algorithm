@@ -33,7 +33,7 @@ CONFIG = [
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180),
     dict(game="opensim",
-         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=2)
+         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=3)
 ][3]    # choose your game
 
 
@@ -158,7 +158,7 @@ def main():
     
     if LOAD_MODEL:
         # load model, keep training
-        net_params = np.load('./models/model_reward_2'+'.npy')
+        net_params = np.load('./models/model_reward_3'+'.npy')
 
 
     print("\nTESTING....")

@@ -21,8 +21,8 @@ ENVS = None                # environment list for effective reuse
 LOAD_MODEL = True         # load training result
 N_KID = 4                 # half of the training population
 N_GENERATION = 5000         # training step
-LR = .01                    # learning rate
-SIGMA = .05                 # mutation strength or step size
+LR = .01                   # learning rate
+SIGMA = .1                 # mutation strength or step size
 N_CORE = mp.cpu_count()-1
 CONFIG = [
     dict(game="CartPole-v0",
@@ -32,7 +32,7 @@ CONFIG = [
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180),
     dict(game="opensim",
-         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=3)
+         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=4)
 ][3]    # choose your game
 
 
@@ -61,7 +61,7 @@ class ADAM(object):                      # optimizer with momentum
         lr_t = self.lr * (np.sqrt(fix2) / fix1)
 
         m_t = (self.b1 * gradients) + ((1. - self.b1) * self.v)
-        v_t = (self.b2 * np.sqrt(gradients)) + ((1. - self.b2) * self.v)
+        v_t = (self.b2 * np.sqrt(abs(gradients))) + ((1. - self.b2) * self.v)
         g_t = m_t / (np.sqrt(v_t) + self.e)
         return lr_t * g_t
 
@@ -86,7 +86,7 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
     p = params_reshape(shapes, params)
     # run episode
     s = env.reset()
-    e_a = engineered_action(0.1)
+    e_a = np.ones(18)*0.05#engineered_action(0.1)
     s = env.step(e_a)[0]
     s1 = env.step(e_a)[0]
     s = process_state(s,s1)
@@ -159,7 +159,8 @@ def main():
     
     if LOAD_MODEL:
         # load model, keep training
-        net_params = np.load('./models/model_reward_2'+'.npy')
+        print("Load Model Success!")
+        net_params = np.load('./models/model_reward_3'+'.npy')
         
     #env = gym.make(CONFIG['game']).unwrapped
     ENVS = [ei(vis=False,seed=0,diff=0) for _ in range(N_KID*2)]
@@ -184,6 +185,7 @@ def main():
                 '| Total_T: %.2f' % ((time.time() - t_start)/3600)+'h',)
             if mar >= CONFIG['eval_threshold']:
                 # succeed, save model and break
+                print("Success, save model!")
                 np.save('./models/model_reward_'+str(CONFIG['eval_threshold']),net_params)
                 CONFIG['eval_threshold'] += 2
 
