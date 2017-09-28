@@ -8,7 +8,34 @@ import tensorflow as tf
 
 
 def dlrelu(x, alpha=0.1):
-  return tf.nn.relu(x) - alpha * tf.nn.relu(0.05-x) - (1 - alpha) *  tf.nn.relu(x-0.95) 
+  return tf.nn.relu(x) - alpha * tf.nn.relu(0.05-x) - (1 - alpha) *  tf.nn.relu(x-0.95)
+  
+class RunningStat(object):
+    def __init__(self, shape, eps):
+        self.sum = np.zeros(shape, dtype=np.float32)
+        self.sumsq = np.full(shape, eps, dtype=np.float32)
+        self.count = eps
+
+    def increment(self, s, ssq, c):
+        self.sum += s
+        self.sumsq += ssq
+        self.count += c
+
+    @property
+    def mean(self):
+        return self.sum / self.count
+
+    @property
+    def std(self):
+        return np.sqrt(np.maximum(self.sumsq / self.count - np.square(self.mean), 1e-2))
+
+    def set_from_init(self, init_mean, init_std, init_count):
+        self.sum[:] = init_mean * init_count
+        self.sumsq[:] = (np.square(init_mean) + np.square(init_std)) * init_count
+        self.count = init_count
+     
+def normalize(x):
+    return (x - np.mean(x)) / np.std(x)
 
 # process state (the last 3 entires are obstacle info which should not be processed)
 def process_state(s,s1,center=True,diff=0):
@@ -37,9 +64,9 @@ def process_state(s,s1,center=True,diff=0):
       for j in y_vs:
           s[j] -= s[21]
       # transform cm as origin
-      s[18:22] = 0.0
-        
-    return s
+      #s[18:22] = 0.0
+      s = np.delete(s,[18,19,20,21])  
+    return normalize(s)
         
 def n_step_transition(episode_buffer,n_step,gamma):
     _,_,_,s1,done = episode_buffer[-1]
