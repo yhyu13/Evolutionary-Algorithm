@@ -18,10 +18,11 @@ from helper import *
 
 POOL = None                # multiprocess pool
 ENVS = None                # environment list for effective reuse
-LOAD_MODEL = True         # load training result
+LOAD_MODEL = False         # load training result
 N_KID = 4                 # half of the training population
+N_STEP = 2                # frame skip
 N_GENERATION = 5000         # training step
-LR = .01                   # learning rate
+LR = .05                   # learning rate
 SIGMA = .1                 # mutation strength or step size
 N_CORE = mp.cpu_count()-1
 CONFIG = [
@@ -32,7 +33,7 @@ CONFIG = [
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180),
     dict(game="opensim",
-         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=4)
+         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=2)
 ][3]    # choose your game
 
 
@@ -40,11 +41,15 @@ def sign(k_id): return -1. if k_id % 2 == 0 else 1.  # mirrored sampling
 
 
 class SGD(object):                      # optimizer with momentum
-    def __init__(self, params, learning_rate, momentum=0.9):
+    def __init__(self, params, learning_rate, momentum=0.9,b1=0.1, b2=0.001):
         self.v = np.zeros_like(params).astype(np.float32)
-        self.lr, self.momentum = learning_rate, momentum
+        self.lr, self.momentum,self.b1,self.b2 = learning_rate, momentum,b1,b2
 
     def get_gradients(self, gradients):
+        self.t += 1
+        fix1 = 1. - (1. - self.b1)**self.t
+        fix2 = 1. - (1. - self.b2)**self.t
+        lr_t = self.lr * (np.sqrt(fix2) / fix1)
         self.v = self.momentum * self.v + (1. - self.momentum) * gradients
         return self.lr * self.v
 
@@ -92,9 +97,14 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
     s = process_state(s,s1)
     ep_r = 0.
     for step in range(ep_max_step):
-        a = get_action(p, s, continuous_a)
-        s2, r, done, _ = env.step(a)
-        s1 = process_state(s1,s2)
+        a = get_action_2(p, s, continuous_a)
+        temp_r = 0
+        for i in range(N_STPE):
+            s2, r, done, _ = env.step(a)
+            if done: break
+            if i = N_STEP - 2:
+                s1 = process_state(s1,s2)
+            temp_r += r
         s = s1
         s1 = s2
         ep_r += r
@@ -124,6 +134,29 @@ def build_net():
     s1, p1 = linear(30, 20)
     s2, p2 = linear(20, CONFIG['n_action'],last_layer=True)
     return [s0, s1, s2], np.concatenate((p0, p1, p2))
+    
+    
+'''
+One hidden layer 64 neurons
+'''
+def get_action_2(params, x, continuous_a):
+    x = np.expand_dims(x, axis=0)
+    x = sigmoid((x.dot(params[0]) + params[1]))
+    x = x.dot(params[2]) + params[3]
+    return sigmoid(x)[0]                # for continuous action
+
+
+def build_net_2():
+    def linear(n_in, n_out,last_layer=False):  # network linear layer
+        w = np.random.randn(n_in * n_out).astype(np.float32) * .1
+        b = np.random.randn(n_out).astype(np.float32) * .1
+        if last_layer:
+            b -= 3. # samrt sigmoid
+        return (n_in, n_out), np.concatenate((w, b))
+    s0, p0 = linear(CONFIG['n_feature'], 64)
+    s1, p1 = linear(64, CONFIG['n_action'],last_layer=True)
+    return [s0, s1], np.concatenate((p0, p1))
+    
 
 
 def train(net_shapes, net_params, optimizer, utility):
@@ -155,7 +188,7 @@ def main():
     utility = util_ / util_.sum() - 1 / base
 
     # training
-    net_shapes, net_params = build_net()
+    net_shapes, net_params = build_net_2()
     
     if LOAD_MODEL:
         # load model, keep training
@@ -164,7 +197,7 @@ def main():
         
     #env = gym.make(CONFIG['game']).unwrapped
     ENVS = [ei(vis=False,seed=0,diff=0) for _ in range(N_KID*2)]
-    optimizer = ADAM(net_params, LR)#SGD(net_params, LR)
+    optimizer = SGD(net_params, LR)#ADAM(net_params, LR)
     POOL = mp.Pool(processes=N_CORE)
     mar = None      # moving average reward
     t_start = time.time()
@@ -183,11 +216,11 @@ def main():
                 '| Kid_avg_R: %.2f' % kid_rewards.mean(),
                 '| Gen_T: %.2f' % (time.time() - t0),
                 '| Total_T: %.2f' % ((time.time() - t_start)/3600)+'h',)
-            if mar >= CONFIG['eval_threshold']:
+            if mar >= CONFIG['eval_threshold']+0.5:
                 # succeed, save model and break
                 print("Success, save model!")
                 np.save('./models/model_reward_'+str(CONFIG['eval_threshold']),net_params)
-                CONFIG['eval_threshold'] += 2
+                CONFIG['eval_threshold'] += 1
 
 
     except KeyboardInterrupt:
