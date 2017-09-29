@@ -45,7 +45,8 @@ def process_state(s,s1,center=True,diff=0):
     s_3 = (s1[38:]-s[38:]) / 0.01
     s = np.hstack((s1[:36],s_14,s1[36:],s_3))
     if diff == 0:
-        s[-6:] = 0.0 # if diff = 0, then manully turn off all obstacles
+        #s[-6:] = 0.0 # if diff = 0, then manully turn off all obstacles
+        s = np.delete(s,[52,53,54,55,56,57])
 
     if center:
       # transform into all relative quantities

@@ -18,7 +18,7 @@ from helper import *
 
 POOL = None                # multiprocess pool
 ENVS = None                # environment list for effective reuse
-DIFF = 0
+DIFF = 1
 LOAD_MODEL = False         # load training result
 N_KID = 4                 # half of the training population
 N_STEP = 3                # frame skip
@@ -34,7 +34,7 @@ CONFIG = [
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180),
     dict(game="opensim",
-         n_feature=54, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=2)
+         n_feature=48, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=1)
 ][3]    # choose your game
 
 
@@ -93,10 +93,10 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
     p = params_reshape(shapes, params)
     # run episode
     s = env.reset()
-    e_a = np.ones(18)*0.05#engineered_action(0.1)
+    e_a = engineered_action(0.1)#np.ones(18)*0.05
     s = env.step(e_a)[0]
     s1 = env.step(e_a)[0]
-    s = process_state(s,s1,diff=DIFF)
+    s = process_state(s,s1,diff=0)
     ep_r = 0.
     for step in range(ep_max_step):
         a = get_action_2(p, s, continuous_a)
@@ -105,7 +105,7 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
             s2, r, done, _ = env.step(a)
             if done: break
             if i == N_STEP - 2: s1 = s2
-            if i == N_STEP - 1: s1 = process_state(s1,s2,diff=DIFF)
+            if i == N_STEP - 1: s1 = process_state(s1,s2,diff=0)
             temp_r += r
         s = s1
         s1 = s2
@@ -115,7 +115,13 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
 
 # hangyu5 Sep25
 def sigmoid(x):
-    return 1 / (1 + np.exp(-np.clip(x,-5,5)))
+    return 1 / (1 + np.exp(-np.clip(x,-4,4)))
+    
+def tanh(x):
+    return np.tanh(np.clip(x,-3,3))
+
+def relu(x):
+    return np.maximum(x,0.0)
 
 def get_action(params, x, continuous_a):
     x = np.expand_dims(x, axis=0)
@@ -126,8 +132,8 @@ def get_action(params, x, continuous_a):
     
 def get_action_2(params, x, continuous_a):
     x = np.expand_dims(x, axis=0)
-    x = sigmoid(x.dot(params[0]) + params[1])
-    x = sigmoid(x.dot(params[2]) + params[3])
+    x = tanh(x.dot(params[0]) + params[1])
+    x = tanh(x.dot(params[2]) + params[3])
     x = x.dot(params[4]) + params[5]
     return sigmoid(x)[0]                # for continuous action
 
