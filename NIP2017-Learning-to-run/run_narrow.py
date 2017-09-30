@@ -18,13 +18,13 @@ from helper import *
 
 POOL = None                # multiprocess pool
 ENVS = None                # environment list for effective reuse
-DIFF = 1
-LOAD_MODEL = True         # load training result
-N_KID = 2                 # half of the training population
-N_STEP = 1                # frame skip
+DIFF = 0
+LOAD_MODEL = False         # load training result
+N_KID = 4                 # half of the training population
+N_STEP = 2                # frame skip
 N_GENERATION = 5000         # training step
 LR = .05                   # learning rate
-SIGMA = .05                 # mutation strength or step size
+SIGMA = .1                 # mutation strength or step size
 N_CORE = mp.cpu_count()-1
 CONFIG = [
     dict(game="CartPole-v0",
@@ -34,7 +34,7 @@ CONFIG = [
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180),
     dict(game="opensim",
-         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=3)
+         n_feature=48, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=15)
 ][3]    # choose your game
 
 
@@ -96,17 +96,17 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
     e_a = np.ones(18)*0.05#engineered_action(0.1)
     s = env.step(e_a)[0]
     s1 = env.step(e_a)[0]
-    s = process_state_3(s,s1,diff=0)
+    s = process_state(s,s1,diff=0)
     ep_r = 0.
     for step in range(ep_max_step):
-        a = get_action(p, s, continuous_a)
+        a = get_action_2(p, s, continuous_a)
         temp_r = 0
         for i in range(N_STEP):
             s2, r, done, _ = env.step(a)
             if done: break
             if i == N_STEP - 2: s1 = s2
-            if i == N_STEP - 1: s1 = process_state_3(s1,s2,diff=0)
-            temp_r += r
+            if i == N_STEP - 1: s1 = process_state(s1,s2,diff=0)
+            temp_r += r/0.1 + 0.05
         s = s1
         s1 = s2
         ep_r += temp_r
@@ -121,6 +121,13 @@ def get_action(params, x, continuous_a):
     x = np.expand_dims(x, axis=0)
     x = np.maximum((x.dot(params[0]) + params[1]),0.0)
     x = np.maximum((x.dot(params[2]) + params[3]),0.0)
+    x = x.dot(params[4]) + params[5]
+    return sigmoid(x)[0]                # for continuous action
+    
+def get_action_2(params, x, continuous_a):
+    x = np.expand_dims(x, axis=0)
+    x = np.tanh(x.dot(params[0]) + params[1])
+    x = np.tanh((x.dot(params[2]) + params[3])
     x = x.dot(params[4]) + params[5]
     return sigmoid(x)[0]                # for continuous action
 
@@ -144,9 +151,9 @@ def build_net_2():
         if last_layer:
             b -= 3. # samrt sigmoid
         return (n_in, n_out), np.concatenate((w, b))
-    s0, p0 = linear(CONFIG['n_feature'], 256)
-    s1, p1 = linear(256, 256)
-    s2, p2 = linear(256, CONFIG['n_action'],last_layer=True)
+    s0, p0 = linear(CONFIG['n_feature'], 64)
+    s1, p1 = linear(64, 64)
+    s2, p2 = linear(64, CONFIG['n_action'],last_layer=True)
     return [s0, s1, s2], np.concatenate((p0, p1, p2))
     
 
@@ -181,7 +188,7 @@ def main():
     utility = util_ / util_.sum() - 1 / base
 
     # training
-    net_shapes, net_params = build_net()
+    net_shapes, net_params = build_net_2()
     
     if LOAD_MODEL:
         # load model, keep training
@@ -209,11 +216,11 @@ def main():
                 '| Kid_avg_R: %.2f' % kid_rewards.mean(),
                 '| Gen_T: %.2f' % (time.time() - t0),
                 '| Total_T: %.2f' % ((time.time() - t_start)/3600)+'h',)
-            if mar >= CONFIG['eval_threshold']+0.5:
+            if mar >= CONFIG['eval_threshold']+2.5:
                 # succeed, save model and break
                 print("Success, save model!")
                 np.save('./models_narrow/model_reward_'+str(CONFIG['eval_threshold']),net_params)
-                CONFIG['eval_threshold'] += 1
+                CONFIG['eval_threshold'] += 10
 
 
     except KeyboardInterrupt:
