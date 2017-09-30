@@ -18,9 +18,9 @@ from helper import *
 
 POOL = None                # multiprocess pool
 ENVS = None                # environment list for effective reuse
-DIFF = 0
-LOAD_MODEL = False         # load training result
-N_KID = 4                 # half of the training population
+DIFF = 1
+LOAD_MODEL = True         # load training result
+N_KID = 2                 # half of the training population
 N_STEP = 1                # frame skip
 N_GENERATION = 5000         # training step
 LR = .05                   # learning rate
@@ -34,7 +34,7 @@ CONFIG = [
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180),
     dict(game="opensim",
-         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=1)
+         n_feature=58, n_action=18, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=3)
 ][3]    # choose your game
 
 
@@ -189,7 +189,7 @@ def main():
         net_params = np.load('./models_narrow/model_reward_3'+'.npy')
         
     #env = gym.make(CONFIG['game']).unwrapped
-    ENVS = [ei(vis=False,seed=0,diff=DIFF) for _ in range(N_KID*2)]
+    ENVS = [ei(vis=True,seed=0,diff=DIFF) for _ in range(N_KID*2)]
     optimizer = SGD(net_params, LR)#ADAM(net_params, LR)
     POOL = mp.Pool(processes=N_CORE)
     mar = None      # moving average reward

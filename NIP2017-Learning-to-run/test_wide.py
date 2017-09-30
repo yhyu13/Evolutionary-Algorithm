@@ -91,7 +91,7 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
     e_a = np.ones(18)*0.05#engineered_action(0.1)
     s = env.step(e_a)[0]
     s1 = env.step(e_a)[0]
-    s = process_state_2(s,s1,diff=DIFF)
+    s = process_state(s,s1,diff=DIFF)
     ep_r = 0.
     for step in range(ep_max_step):
         a = get_action(p, s, continuous_a)
@@ -101,7 +101,7 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
             s2, r, done, _ = env.step(a)
             if done: break
             if i == N_STEP - 2: s1 = s2
-            if i == N_STEP - 1: s1 = process_state_2(s1,s2,diff=DIFF)
+            if i == N_STEP - 1: s1 = process_state(s1,s2,diff=DIFF)
             temp_r += r
         s = s1
         s1 = s2
@@ -184,7 +184,7 @@ def main():
     
     if LOAD_MODEL:
         # load model, keep training
-        net_params = np.load('./models_wide (copy)/model_reward_1'+'.npy')
+        net_params = np.load('./models_wide/model_reward_1'+'.npy')
 
 
     print("\nTESTING....")
