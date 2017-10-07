@@ -22,6 +22,8 @@ CONFIG = [
          n_feature=2, n_action=3, continuous_a=[False], ep_max_step=200, eval_threshold=-120),
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180)
+    dict(game="MNIST",
+         n_feature=784, n_action=10, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=95)
 ][2]    # choose your game
 
 
