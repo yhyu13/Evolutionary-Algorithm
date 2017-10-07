@@ -9,7 +9,10 @@ import numpy as np
 import gym
 import multiprocessing as mp
 import time
+from tensorflow.examples.tutorials.mnist import input_data
+import sklearn
 
+DATA_DIR = None
 N_KID = 10                  # half of the training population
 N_GENERATION = 5000         # training step
 LR = .05                    # learning rate
@@ -23,7 +26,7 @@ CONFIG = [
     dict(game="Pendulum-v0",
          n_feature=3, n_action=1, continuous_a=[True, 2.], ep_max_step=200, eval_threshold=-180)
     dict(game="MNIST",
-         n_feature=784, n_action=10, continuous_a=[True, 1.], ep_max_step=1000, eval_threshold=95)
+         n_feature=784, n_action=10, continuous_a=[True, 1.], ep_max_step=10, eval_threshold=95)
 ][2]    # choose your game
 
 
@@ -49,6 +52,8 @@ def params_reshape(shapes, params):     # reshape to be a matrix
         start += n_w + n_b
     return p
 
+def normalize(x):
+    return (x - np.mean(x) / np.std(x)
 
 def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,):
     # perturb parameters using seed
@@ -58,35 +63,32 @@ def get_reward(shapes, params, env, ep_max_step, continuous_a, seed_and_id=None,
         params += sign(k_id) * SIGMA * np.random.randn(params.size)
     p = params_reshape(shapes, params)
     # run episode
-    s = env.reset()
-    ep_r = 0.
-    for step in range(ep_max_step):
-        a = get_action(p, s, continuous_a)
-        s, r, done, _ = env.step(a)
-        # mountain car's reward can be tricky
-        if env.spec._env_name == 'MountainCar' and s[0] > -0.1: r = 0.
-        ep_r += r
-        if done: break
+    y = get_action(p,normalize(env['x']),continuous_a)
+    ep_r = -sklearn.metrics.log_loss(env['y'],y)
     return ep_r
 
+def softmax(x):
+    """Compute softmax values for each sets of scores in x."""
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0) # only difference
 
 def get_action(params, x, continuous_a):
-    x = x[np.newaxis, :]
-    x = np.tanh(x.dot(params[0]) + params[1])
-    x = np.tanh(x.dot(params[2]) + params[3])
-    x = x.dot(params[4]) + params[5]
-    if not continuous_a[0]: return np.argmax(x, axis=1)[0]      # for discrete action
+    scale = 2**125
+    x = (x.dot(params[0]) + params[1]) / scale
+    x = (x.dot(params[2]) + params[3] / scale)
+    x = (x.dot(params[4]) + params[5] / scale)*scale
+    if not continuous_a[0]: return sotfmax(x)      # for discrete action
     else: return continuous_a[1] * np.tanh(x)[0]                # for continuous action
 
 
 def build_net():
     def linear(n_in, n_out):  # network linear layer
-        w = np.random.randn(n_in * n_out).astype(np.float32) * .1
-        b = np.random.randn(n_out).astype(np.float32) * .1
+        w = np.random.randn(n_in * n_out).astype(np.float32) * np.sqrt(2/n_in)
+        b = np.random.randn(n_out).astype(np.float32) * np.sqrt(2/n_in)
         return (n_in, n_out), np.concatenate((w, b))
-    s0, p0 = linear(CONFIG['n_feature'], 30)
-    s1, p1 = linear(30, 20)
-    s2, p2 = linear(20, CONFIG['n_action'])
+    s0, p0 = linear(CONFIG['n_feature'], 512)
+    s1, p1 = linear(512, 512)
+    s2, p2 = linear(10, CONFIG['n_action'])
     return [s0, s1, s2], np.concatenate((p0, p1, p2))
 
 
@@ -109,8 +111,18 @@ def train(net_shapes, net_params, optimizer, utility, pool):
     return net_params + gradients, rewards
 
 
+def get_batch(train):
+    """Make a TensorFlow feed_dict: maps data onto Tensor placeholders."""
+    if train or FLAGS.fake_data:
+      xs, ys = mnist.train.next_batch(100)
+    else:
+      xs, ys = mnist.test.images, mnist.test.labels
+    return {'x': xs, 'y': ys}
+
 if __name__ == "__main__":
     # utility instead reward for update parameters (rank transformation)
+    mnist = input_data.read_data_sets(DATA_DIR,
+                                    one_hot=True)
     base = N_KID * 2    # *2 for mirrored sampling
     rank = np.arange(1, base + 1)
     util_ = np.maximum(0, np.log(base / 2 + 1) - np.log(rank))
@@ -118,7 +130,7 @@ if __name__ == "__main__":
 
     # training
     net_shapes, net_params = build_net()
-    env = gym.make(CONFIG['game']).unwrapped
+    env = get_batch(True)
     optimizer = SGD(net_params, LR)
     pool = mp.Pool(processes=N_CORE)
     mar = None      # moving average reward
@@ -129,6 +141,7 @@ if __name__ == "__main__":
         # test trained net without noise
         net_r = get_reward(net_shapes, net_params, env, CONFIG['ep_max_step'], CONFIG['continuous_a'], None,)
         mar = net_r if mar is None else 0.9 * mar + 0.1 * net_r       # moving average reward
+        env = get_batch(True)
         print(
             'Gen: ', g,
             '| Net_R: %.1f' % mar,
